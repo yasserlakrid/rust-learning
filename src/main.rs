@@ -5,12 +5,13 @@ mod trees ;
 use trees::Mtree;
 
 fn main() {
-    let  stack = Mstack::news() ; 
-    println!("{}" , stack.top());
+    
     let mut tree = Mtree::new(); 
-    tree.insert_rc(1); 
-    tree.insert_rc(2);
-    tree.insert_lc(3); 
+    tree.insert(1);
+    tree.insert(4);
+    tree.insert(10);
+    tree.insert(2);
+    tree.print(); 
 
 
     

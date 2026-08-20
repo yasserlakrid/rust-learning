@@ -8,37 +8,69 @@ pub struct Mtree {
     root : Option<Box<Node>>
 }
 impl Mtree {
+ 
+
     pub fn new()->Self{
         Mtree {
             root : None
         }
     }
-    
-    pub fn insert_rc(&mut self , value : i32 ){
-        let new_node = Node {
-            rc : None , lc : None , value : value 
-        };
 
+    pub fn insert(&mut self  , value_in : i32 ){
         match &mut self.root {
-            Some(root) => {
-               root.rc = Some(Box::new(new_node)) ;
+            Some(root)=>{
+                root.insert(value_in);
             },
-            None => self.root =Some(Box::new(new_node))  ,
-        }
-    }
-
-    pub fn insert_lc(&mut self , value : i32 ){
-        let new_node = Node {
-            rc : None , lc : None , value : value 
-        };
-
-        match &mut self.root {
-            Some(root) => {
-               root.lc = Some(Box::new(new_node)) ;
-            },
-            None => self.root =Some(Box::new(new_node))  ,
+            None => {
+                self.root = Some(Box::new(Node {
+                    rc : None , lc: None , value : value_in
+                }))
+            }
         }
     }
     
-    
+    pub fn print(&self){
+        if let Some(root) = &self.root  {
+            root.print()
+        }
+       
+    }
 }
+impl Node {
+    pub fn print(&self){
+            if let Some(left_child) = &self.lc {
+                left_child.print();
+
+            }
+
+            println!("{}" ,  self.value);
+            
+            if let Some(right_child) = &self.rc {
+                right_child.print();
+
+              }
+    }
+
+    pub fn insert(&mut self , value_in : i32){
+      
+           
+                if self.value < value_in {
+                    match &mut self.rc {
+                        Some(node) => node.insert(value_in),
+                        None => self.rc = Some(Box::new(Node {
+                            rc : None, lc : None , value : value_in
+                        }))
+                    }
+                }else{
+                    match &mut self.lc {
+                        Some(node) => node.insert(value_in),
+                        None => self.lc = Some(Box::new(Node {
+                            rc : None, lc : None , value : value_in
+                        }))
+                    }
+                }
+        
+
+           
+        }
+    } 
