@@ -1,14 +1,21 @@
 use std::collections::HashMap;
 use std::net::TcpListener;
+use serde::{Serialize, Deserialize};
 use std::io::{Read  , Write }; 
-#[derive(Clone , Debug)]
-
+#[derive(Clone , Debug, Serialize )]
 struct Task {
     name : String , id : i32 , done : bool 
 }
 struct Tasks {
     tasks : HashMap<i32  , Task > , next_id : i32 
 }
+
+#[derive(Deserialize)]
+struct TaskInput{
+    title : Option<String>,
+    done : Option<bool> 
+}
+
 impl Tasks {
     fn new()->Self{
         Tasks {
@@ -16,7 +23,7 @@ impl Tasks {
         }
     }
     
-    fn create(&mut self , title : String)-> &Task {
+    fn create(&mut self , title : String)-> Option<&Task> {
         let id = self.next_id ; 
         
         let new_task = Task {
@@ -26,7 +33,7 @@ impl Tasks {
         self.next_id += 1 ; 
 
         self.tasks.insert(id , new_task) ; 
-        self.tasks.get(&id).unwrap()
+        self.tasks.get(&id)
     }
 
     fn update(&mut self , title : Option<String> , done : Option<bool> , id : i32 ) -> Option<&Task> {
@@ -55,7 +62,10 @@ impl Tasks {
     }
 }
 fn main() {
-   
+let mut tasks = Tasks::new(); 
+tasks.create(String::from("eat lunch")); 
+tasks.create(String::from("eat dinner")); 
+
 let connection = TcpListener::bind("127.0.0.1:7777").unwrap(); 
 for stream in connection.incoming() {
     println!("new connection sets"); 
@@ -63,27 +73,52 @@ for stream in connection.incoming() {
     let mut buf = [0;1024] ; 
     let n = stream.read(&mut buf ).unwrap() ; 
     let request = String::from_utf8_lossy(&buf[..n]);
-    let request_line = request.lines().next().unwrap(); 
+    
+    let request_line = request.split("\r\n\r\n").nth(0).unwrap();
+    let body  = request.split("\r\n\r\n").nth(1).unwrap();
+
     let mut parts = request_line.split_whitespace(); 
     let method = parts.next().unwrap_or(""); 
     let  path = parts.next().unwrap_or(""); 
+
     let mut response = String::new(); 
-    println!("{} , {}" , method , path); 
-    match method {
-        "GET" => {
-            match path {
-                "/tasks" => {
-                    response = String::from("the tasks are : ");
-                },
-                _=> {response = String::from("you didn't asked about tasks nigga") ; }
+    println!("{} , {}" , method , path);
+    match (method,path) {
+        ("GET" , "/") => {
+            response = String::from("<h1>put something on the path nigga</h1>"); 
+        },
+        ("GET" , "/tasks") => {
+             let tasks_vec = tasks.read_all(); 
+                    let json = serde_json::to_string(&tasks_vec).unwrap(); 
+                    response =  json ;
+        },
+        ("POST" , "/tasks") => {
+            let input : TaskInput = serde_json::from_str(body).unwrap();
+            match tasks.create(input.title.unwrap_or("".to_string())){
+                Some(task) => response = serde_json::to_string(&task).unwrap(),
+                None => return 
+            } 
+
+        } ,
+        ("PUT" , p) if p.starts_with("/tasks/") => {
+            let id = p[7..].parse().unwrap_or(-1);
+            let update : TaskInput = serde_json::from_str(body).unwrap();
+            match tasks.update(update.title , update.done , id ) {
+                Some(task) => response = serde_json::to_string(task).unwrap(),
+                None => response = String::from("no task available with this id NIGGA") 
             }
-        }, 
+            
+        },
+       
         _=> { 
-            response = String::from("what the fuck you put in the method nigga"); 
+            response = String::from("<h1>404</h1>"); 
         }
 
     }
-    stream.write_all(response.as_bytes()); 
+    let http_response = format!(
+        "HTTP/1.1 200 OK\r\nContent-type: application/json\r\n\r\n{}" , response
+    );
+    stream.write_all(http_response.as_bytes()); 
 }
 
 }
