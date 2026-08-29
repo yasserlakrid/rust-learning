@@ -81,22 +81,28 @@ for stream in connection.incoming() {
     let method = parts.next().unwrap_or(""); 
     let  path = parts.next().unwrap_or(""); 
 
+
+    let err_404 = String::from(r#"{"status": 404, "code": "no task available with this id"}"#) ; 
+    let mut status  : &str = ""; 
+
     let mut response = String::new(); 
     println!("{} , {}" , method , path);
     match (method,path) {
         ("GET" , "/") => {
             response = String::from("<h1>put something on the path nigga</h1>"); 
+            status = "200 OK"
         },
         ("GET" , "/tasks") => {
              let tasks_vec = tasks.read_all(); 
                     let json = serde_json::to_string(&tasks_vec).unwrap(); 
                     response =  json ;
+                     status = "200 OK"
         },
         ("POST" , "/tasks") => {
             let input : TaskInput = serde_json::from_str(body).unwrap();
             match tasks.create(input.title.unwrap_or("".to_string())){
-                Some(task) => response = serde_json::to_string(&task).unwrap(),
-                None => return 
+                Some(task) =>{ response = serde_json::to_string(&task).unwrap() ;  status = "200 OK" ; }, 
+                None => {response = err_404 ; status = "400 NOT FOUND"; } ,
             } 
 
         } ,
@@ -104,19 +110,35 @@ for stream in connection.incoming() {
             let id = p[7..].parse().unwrap_or(-1);
             let update : TaskInput = serde_json::from_str(body).unwrap();
             match tasks.update(update.title , update.done , id ) {
-                Some(task) => response = serde_json::to_string(task).unwrap(),
-                None => response = String::from("no task available with this id NIGGA") 
+                Some(task) => {response = serde_json::to_string(task).unwrap();  status = "200 OK"  ; },
+                None =>{ 
+                    response = err_404 ; 
+                    status = "400 NOT FOUND";
+                } ,
             }
             
         },
-       
+        ("DELETE" , p) if p.starts_with("/tasks/") => {
+            let id = p[7..].parse().unwrap_or(-1);
+            match tasks.delete(id) {
+                Some(task) => {
+                    response = serde_json::to_string(&task).unwrap() ;
+                    println!("{:?} is deleted successefuly" , task);
+                    status = "200 OK" ; 
+                },
+                None => {
+                    response = err_404 ;
+                    status = "400 NOT FOUND" ; 
+                }
+            }
+        }
         _=> { 
-            response = String::from("<h1>404</h1>"); 
+            response = String::from(r#"{"status": 404}"#); 
         }
 
     }
     let http_response = format!(
-        "HTTP/1.1 200 OK\r\nContent-type: application/json\r\n\r\n{}" , response
+        "HTTP/1.1 {}\r\nContent-type: application/json\r\n\r\n{}" , status ,response
     );
     stream.write_all(http_response.as_bytes()); 
 }
