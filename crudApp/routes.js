@@ -1,5 +1,5 @@
 async function  updateTask(id , title , status){ 
-    return await fetch(`http://127.0.0.1:7777/tasks/${id}` , {
+     await fetch(`http://127.0.0.1:7777/tasks/${id}` , {
         method : 'PUT' , 
         headers : {
                 "content-type" : "application/json"
@@ -11,7 +11,7 @@ async function  updateTask(id , title , status){
         ).then (res => res.json()).then(res => res).catch(err => console.log(err))
 }
 async function addTask(title) {
-    return await fetch("http://127.0.0.1:7777/tasks" , {
+     await fetch("http://127.0.0.1:7777/tasks" , {
 method : 'POST' , headers : {
   'content-type' : 'application/json'
 },

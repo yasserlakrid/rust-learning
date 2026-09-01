@@ -1,7 +1,9 @@
 use std::collections::HashMap;
-use std::net::TcpListener;
+use std::net::{TcpListener ,  TcpStream };
+use std::sync::{Arc , Mutex }; 
 use serde::{Serialize, Deserialize};
 use std::io::{Read  , Write }; 
+use std::thread;
 #[derive(Clone , Debug, Serialize )]
 struct Task {
     name : String , id : i32 , done : bool 
@@ -61,15 +63,9 @@ impl Tasks {
     }
     }
 }
-fn main() {
-let mut tasks = Tasks::new(); 
-tasks.create(String::from("eat lunch")); 
-tasks.create(String::from("eat dinner")); 
-
-let connection = TcpListener::bind("127.0.0.1:7777").unwrap(); 
-for stream in connection.incoming() {
-    println!("new connection sets"); 
-    let mut stream = stream.unwrap() ; 
+fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>>){
+    println!("creating a new thread only for your connection you're lucky dumbass");
+   
     let mut buf = [0;1024] ; 
     let n = stream.read(&mut buf ).unwrap() ; 
     let request = String::from_utf8_lossy(&buf[..n]);
@@ -86,61 +82,79 @@ for stream in connection.incoming() {
     let mut status  : &str = ""; 
 
     let mut response = String::new(); 
-    println!("{} , {}" , method , path);
+    {
+    let mut tasks = match tasks.lock()  {Ok(tasking) => {tasking} , Err(poisen) => {return}};
     match (method,path) {
-        ("GET" , "/") => {
-            response = String::from("<h1>put something on the path nigga</h1>"); 
-            status = "200 OK"
-        },
-        ("GET" , "/tasks") => {
-             let tasks_vec = tasks.read_all(); 
-                    let json = serde_json::to_string(&tasks_vec).unwrap(); 
-                    response =  json ;
-                     status = "200 OK"
-        },
-        ("POST" , "/tasks") => {
-            let input : TaskInput = serde_json::from_str(body).unwrap();
-            match tasks.create(input.title.unwrap_or("".to_string())){
-                Some(task) =>{ response = serde_json::to_string(&task).unwrap() ;  status = "200 OK" ; }, 
-                None => {response = err_404 ; status = "400 NOT FOUND"; } ,
-            } 
+            ("GET" , "/") => {
+                response = String::from("<h1>put something on the path nigga</h1>"); 
+                status = "200 OK"
+            },
+            ("GET" , "/tasks") => {
+                let tasks_vec = tasks.read_all(); 
+                        let json = serde_json::to_string(&tasks_vec).unwrap(); 
+                        response =  json ;
+                        status = "200 OK"
+            },
+            ("POST" , "/tasks") => {
+                let input : TaskInput = serde_json::from_str(body).unwrap();
+                match tasks.create(input.title.unwrap_or("".to_string())){
+                    Some(task) =>{ response = serde_json::to_string(&task).unwrap() ;  status = "200 OK" ; }, 
+                    None => {response = err_404 ; status = "400 NOT FOUND"; } ,
+                } 
 
-        } ,
-        ("PUT" , p) if p.starts_with("/tasks/") => {
-            let id = p[7..].parse().unwrap_or(-1);
-            let update : TaskInput = serde_json::from_str(body).unwrap();
-            match tasks.update(update.title , update.done , id ) {
-                Some(task) => {response = serde_json::to_string(task).unwrap();  status = "200 OK"  ; },
-                None =>{ 
-                    response = err_404 ; 
-                    status = "400 NOT FOUND";
-                } ,
-            }
-            
-        },
-        ("DELETE" , p) if p.starts_with("/tasks/") => {
-            let id = p[7..].parse().unwrap_or(-1);
-            match tasks.delete(id) {
-                Some(task) => {
-                    response = serde_json::to_string(&task).unwrap() ;
-                    println!("{:?} is deleted successefuly" , task);
-                    status = "200 OK" ; 
-                },
-                None => {
-                    response = err_404 ;
-                    status = "400 NOT FOUND" ; 
+            } ,
+            ("PUT" , p) if p.starts_with("/tasks/") => {
+                let id = p[7..].parse().unwrap_or(-1);
+                let update : TaskInput = serde_json::from_str(body).unwrap();
+                match tasks.update(update.title , update.done , id ) {
+                    Some(task) => {response = serde_json::to_string(task).unwrap();  status = "200 OK"  ; },
+                    None =>{ 
+                        response = err_404 ; 
+                        status = "400 NOT FOUND";
+                    } ,
+                }
+                
+            },
+            ("DELETE" , p) if p.starts_with("/tasks/") => {
+                let id = p[7..].parse().unwrap_or(-1);
+                match tasks.delete(id) {
+                    Some(task) => {
+                        response = serde_json::to_string(&task).unwrap() ;
+                        println!("{:?} is deleted successefuly" , task);
+                        status = "200 OK" ; 
+                    },
+                    None => {
+                        response = err_404 ;
+                        status = "400 NOT FOUND" ; 
+                    }
                 }
             }
-        }
-        _=> { 
-            response = String::from(r#"{"status": 404}"#); 
-        }
+            _=> { 
+                response = String::from(r#"{"status": 404}"#); 
+            }
 
-    }
+        }
+        }
+    println!("{} , {}" , method , path);
+   
     let http_response = format!(
         "HTTP/1.1 {}\r\nContent-type: application/json\r\n\r\n{}" , status ,response
     );
     stream.write_all(http_response.as_bytes()); 
 }
+fn main() {
+let tasks = Arc::new(Mutex::new(Tasks::new())); 
+tasks.lock().unwrap().create(String::from("eat lunch")); 
+tasks.lock().unwrap().create(String::from("eat dinner")); 
 
+let connection = TcpListener::bind("127.0.0.1:7777").unwrap(); 
+for stream in connection.incoming() {
+
+    println!("new connection sets"); 
+    let tasks = Arc::clone(&tasks);
+    let mut stream = stream.unwrap() ; 
+    let thread = thread::spawn(move || {
+        handle_connection(stream , tasks);
+    });
+}
 }
