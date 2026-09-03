@@ -13,11 +13,11 @@ impl ThreadPool{
         let (sender , receiver) = mpsc::channel::<Job>();
         let receiver = Arc::new(Mutex::new(receiver)); 
         let mut threads = Vec::with_capacity(size); 
-        for id in 0..=size {
+        for id in 0..size {
             
             let receiver = Arc::clone(&receiver); 
            
-            let thread = thread::spawn(move || {
+            let thread = thread::spawn(move || loop{
                  let job = receiver.lock().unwrap().recv(); 
 
                 match job {
