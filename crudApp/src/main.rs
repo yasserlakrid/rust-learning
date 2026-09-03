@@ -4,6 +4,9 @@ use std::sync::{Arc , Mutex };
 use serde::{Serialize, Deserialize};
 use std::io::{Read  , Write }; 
 use std::thread;
+mod threadpool ; 
+use threadpool::ThreadPool ;
+
 #[derive(Clone , Debug, Serialize )]
 struct Task {
     name : String , id : i32 , done : bool 
@@ -64,8 +67,7 @@ impl Tasks {
     }
 }
 fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>>){
-    println!("creating a new thread only for your connection you're lucky dumbass");
-   
+    
     let mut buf = [0;1024] ; 
     let n = stream.read(&mut buf ).unwrap() ; 
     let request = String::from_utf8_lossy(&buf[..n]);
@@ -142,19 +144,29 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>>){
     );
     stream.write_all(http_response.as_bytes()); 
 }
-fn main() {
+fn main(){
+let threadpool = ThreadPool::new(4); 
+
 let tasks = Arc::new(Mutex::new(Tasks::new())); 
+
 tasks.lock().unwrap().create(String::from("eat lunch")); 
 tasks.lock().unwrap().create(String::from("eat dinner")); 
 
-let connection = TcpListener::bind("127.0.0.1:7777").unwrap(); 
+let connection = TcpListener::bind("127.0.0.1:7777"); 
+let connection = match connection {
+    Ok(connection )=> {
+        println!("the server is running on Port : 7777"); 
+        connection
+    } ,
+    Err(err) => {println!("Failed to bind to port 7777: {}", err); TcpListener::bind("127.0.0.1:7778").unwrap()}
+};
 for stream in connection.incoming() {
 
     println!("new connection sets"); 
     let tasks = Arc::clone(&tasks);
-    let mut stream = stream.unwrap() ; 
-    let thread = thread::spawn(move || {
+    let mut stream = stream.unwrap(); 
+    threadpool.sendtopool( || {
         handle_connection(stream , tasks);
-    });
+    }) 
 }
 }
