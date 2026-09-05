@@ -27,6 +27,16 @@ async function getTasks() {
     }
     }).then(res=>res.json()).then(res => console.log(res)).catch(err => console.log(err))
 }
+async function getTask(id){
+    await fetch(`http://127.0.0.1:7777/tasks/${id}`,{
+         method : 'GET' ,
+        headers:{
+            'content-type' : 'application/json',
+        }    
+    } 
+        
+    ).then(res => res.json()).then(res => console.log(res)).catch(err => console.log(err))
+}
 async function deleteTask(id){
     await fetch(`http://127.0.0.1:7777/tasks/${id}` , {
         method : 'DELETE' , 
@@ -35,5 +45,5 @@ async function deleteTask(id){
         }
     }).then(res=>res.json()).then(res=>console.log("the deleted task is : " , res))
 }
-
+getTask(1)
 getTasks()
