@@ -1,0 +1,14 @@
+/home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/deps/serde-a104c7dddbcb942a.d: /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/build/serde-ecc87e2a8df97661/out/private.rs
+
+/home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/deps/libserde-a104c7dddbcb942a.rlib: /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/build/serde-ecc87e2a8df97661/out/private.rs
+
+/home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/deps/libserde-a104c7dddbcb942a.rmeta: /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/build/serde-ecc87e2a8df97661/out/private.rs
+
+/home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs:
+/home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs:
+/home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs:
+/home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs:
+/home/yasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs:
+/home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/build/serde-ecc87e2a8df97661/out/private.rs:
+
+# env-dep:OUT_DIR=/home/yasser/Projects/rustLearning/asyncawait/asyncRust/target/debug/build/serde-ecc87e2a8df97661/out
