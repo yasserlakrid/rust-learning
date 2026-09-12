@@ -1,0 +1,1 @@
+impl Future<Output = Result<<impl Future<Output = i32> as Future>::Output, Duration>>
