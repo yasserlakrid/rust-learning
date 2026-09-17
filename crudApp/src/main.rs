@@ -119,7 +119,7 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : A
                 status = "200 OK"
             },
             ("GET" , p ) => {
-                db.send("give me some shit "); 
+                db.send("SELECT name FROM  tasks ;"); 
                 if p.starts_with("/tasks/") {
                      let id = p[7..].parse().unwrap_or(-1);
                      let task = tasks.read(id); 
@@ -215,7 +215,7 @@ let connection = match connection {
     } ,
     Err(err) => {println!("Failed to bind to port 7777: {}", err); TcpListener::bind("127.0.0.1:7778").unwrap()}
 };
-let db = DBconnection::new("127.0.0.1:5432"); 
+let db = DBconnection::new("postgres" , "tasks" , "127.0.0.1:5432" ); 
 let db  = match db {
     Some(db) => db , 
     None => db.unwrap()

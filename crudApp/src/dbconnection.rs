@@ -1,27 +1,75 @@
 use std::net::{TcpListener ,  TcpStream };
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex} ; 
-
+use std::io::{Read , Write}; 
 use std::thread ; 
 pub struct DBconnection {
     sender : mpsc::Sender<String> ,
     connection : Arc<Mutex<TcpStream>>
 }
+fn buil_start_up(user : &str , db :&str) -> Vec<u8>{
+   let mut message = Vec::new();
 
+    message.extend_from_slice(&196608i32.to_be_bytes());
+
+    message.extend_from_slice(b"user\0");
+    message.extend_from_slice(user.as_bytes());
+    message.push(0);
+
+    message.extend_from_slice(b"database\0");
+    message.extend_from_slice(db.as_bytes());
+    message.push(0);
+
+    message.push(0); // final parameter-list terminator
+
+    let length = 4 + message.len();
+
+    let mut request = Vec::new();
+
+    request.extend_from_slice(&(length as i32).to_be_bytes());
+    request.extend_from_slice(&message);
+
+    request
+}   
+
+fn build_query(query : &str) -> Vec<u8> {
+    let length = 4 + query.len() + 1 ; 
+    let mut message = Vec::new(); 
+    message.push(b'Q'); 
+    message.extend_from_slice(&(length as i32).to_be_bytes()); 
+    message.extend_from_slice(query.as_bytes());
+    message.push(0);
+    message
+}
 impl DBconnection {
-    pub fn new(port : &str)-> Option<Self> {
+    pub fn new(user : &str , db : &str,port : &str)-> Option<Self> {
         let connection = TcpStream::connect(port); 
-        let connection = match connection {
+        let mut connection = match connection {
             Ok(connection) => connection , 
             Err(err) => return  None
         }; 
-        let (sender , receiver) = mpsc::channel(); 
+        let startupmessage = buil_start_up(user , db);
+        connection.write_all(&startupmessage);
+        let mut buf = [0;1024]; 
+        let n =  connection.read(&mut buf).unwrap(); 
+    
+       
+        let (sender , receiver) = mpsc::channel::<String>(); 
         let connection = Arc::new(Mutex::new(connection)); 
-        let connection = Arc::clone(&connection); 
+        let connectionArc = Arc::clone(&connection); 
        thread::spawn(move || loop{
-            let query = receiver.recv(); 
-
-            println!("new request arrived to be send to the data base {}" , query.unwrap()); 
+            let query = {
+                let query = receiver.recv().unwrap(); 
+                println!("sending the request {:?}" , query);
+                build_query(&query)
+            };
+            let mut connection = connectionArc.lock().unwrap();
+            connection.write_all(&query);
+            let mut buf = [0;1024]; 
+            let n =  connection.read(&mut buf).unwrap(); 
+            let request = String::from_utf8_lossy(&buf[..n]);
+            println!("{}" , request); 
+            
        });
         let connection = Arc::clone(&connection); 
         Some(DBconnection {sender , connection})
