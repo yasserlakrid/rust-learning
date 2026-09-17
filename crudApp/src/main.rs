@@ -9,6 +9,8 @@ use std::fmt;
 mod threadpool ; 
 use threadpool::ThreadPool ;
 use std::sync::atomic::{AtomicUsize , Ordering};
+mod dbconnection;
+use dbconnection::DBconnection ; 
 
 #[derive(Clone , Debug, Serialize )]
 struct Task {
@@ -90,8 +92,9 @@ impl Tasks {
     }
     }
 }
-fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> ){
+fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : Arc<DBconnection>){
     
+
     let mut buf = [0;1024] ; 
     let n = stream.read(&mut buf ).unwrap() ; 
     let request = String::from_utf8_lossy(&buf[..n]);
@@ -116,6 +119,7 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> ){
                 status = "200 OK"
             },
             ("GET" , p ) => {
+                db.send("give me some shit "); 
                 if p.starts_with("/tasks/") {
                      let id = p[7..].parse().unwrap_or(-1);
                      let task = tasks.read(id); 
@@ -142,6 +146,8 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> ){
               
             },
             ("POST" , "/tasks") => {
+                db.send("tak some shit "); 
+
                 let input : TaskInput = serde_json::from_str(body).unwrap();
                 match tasks.create(input.title.unwrap_or("".to_string())){
                     Ok(task) =>{ response = serde_json::to_string(&task).unwrap() ;  status = "200 OK" ; }, 
@@ -150,6 +156,8 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> ){
 
             } ,
             ("PUT" , p) if p.starts_with("/tasks/") => {
+                db.send("update some shit "); 
+
                 let id = p[7..].parse().unwrap_or(-1);
                 let update : TaskInput = serde_json::from_str(body).unwrap();
                 match tasks.update(update.title , update.done , id ) {
@@ -160,6 +168,7 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> ){
                         status = &owned;
                     } ,
                 }
+                
                 
             },
             ("DELETE" , p) if p.starts_with("/tasks/") => {
@@ -193,7 +202,6 @@ fn main(){
 let operations_counter = Arc::new(AtomicUsize::new(0));
 let threadpool = ThreadPool::new(4  , operations_counter ); 
 
-
 let tasks = Arc::new(Mutex::new(Tasks::new())); 
 
 tasks.lock().unwrap().create(String::from("eat lunch")); 
@@ -207,13 +215,21 @@ let connection = match connection {
     } ,
     Err(err) => {println!("Failed to bind to port 7777: {}", err); TcpListener::bind("127.0.0.1:7778").unwrap()}
 };
-for stream in connection.incoming() {
+let db = DBconnection::new("127.0.0.1:5432"); 
+let db  = match db {
+    Some(db) => db , 
+    None => db.unwrap()
+};
 
+let db = Arc::new(db); 
+
+for stream in connection.incoming() {
+    let db = Arc::clone(&db); 
     println!("new connection sets"); 
     let tasks = Arc::clone(&tasks);
     let mut stream = stream.unwrap(); 
     threadpool.sendtopool( || {
-        handle_connection(stream , tasks );
+        handle_connection( stream , tasks , db );
     }) 
 }
 }
