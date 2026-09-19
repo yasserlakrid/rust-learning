@@ -11,12 +11,13 @@ use threadpool::ThreadPool ;
 use std::sync::atomic::{AtomicUsize , Ordering};
 mod dbconnection;
 use dbconnection::DBconnection ; 
+mod sqlParse; 
 
 #[derive(Clone , Debug, Serialize )]
-struct Task {
+pub struct Task {
     name : String , id : i32 , done : bool 
 }
-struct Tasks {
+pub struct Tasks {
     tasks : HashMap<i32  , Task > , next_id : i32 
 }
 
@@ -54,7 +55,7 @@ impl Tasks {
         }
     }
     
-    fn create(&mut self , title : String)-> Result<&Task , TaskErr> {
+    fn create(&mut self ,db : &DBconnection , title : String)-> Result<&Task , TaskErr> {
         let id = self.next_id ; 
         
         let new_task = Task {
@@ -62,7 +63,8 @@ impl Tasks {
         };
 
         self.next_id += 1 ; 
-
+        let message = format!("INSERT INTO  tasks (name , Done ) VALUES ({}, FALSE ) {}" ,new_task.name , ";"); 
+        db.send(&message); 
         self.tasks.insert(id , new_task) ; 
         self.tasks.get(&id).ok_or(TaskErr::TaskNotFound(id))
     }
@@ -73,11 +75,11 @@ impl Tasks {
         if let Some(d) = done {task.done = d } ;
         Ok(task)
     }
-    fn read(&self , id : i32 , db : &DBconnection)->Result<&Task , TaskErr>{
-        let message = format!("SELECT * from tasks WHERE id = {} {}" , id , ";"); 
+    fn read(&self , name : &str , db : &DBconnection)->Result<&Task , TaskErr>{
+        let message = format!("SELECT * from tasks WHERE name = '{}' {}" , name , ";"); 
         db.send(&message); 
-        println!("{} ", db.get());
-        self.tasks.get(&id).ok_or(TaskErr::TaskNotFound(id))
+        println!("the response is : {:?}",db.get());  //i should parse this into a task and return the result
+        self.tasks.get(&1).ok_or(TaskErr::TaskNotFound(1))
     }
 
     fn read_all(&self ) -> Vec<&Task> {
@@ -123,9 +125,9 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : A
             },
             ("GET" , p ) => {
                 if p.starts_with("/tasks/") {
-                     let id = p[7..].parse().unwrap_or(-1);
+                     let name = &p[7..] ; 
                 
-                     let task = tasks.read(id , &db); 
+                     let task = tasks.read(name , &db); 
                      match task {
                         Ok(task) => {
                              let json = serde_json::to_string(&task).unwrap(); 
@@ -149,10 +151,10 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : A
               
             },
             ("POST" , "/tasks") => {
-                db.send("tak some shit "); 
+                
 
                 let input : TaskInput = serde_json::from_str(body).unwrap();
-                match tasks.create(input.title.unwrap_or("".to_string())){
+                match tasks.create(&db,input.title.unwrap_or("".to_string())){
                     Ok(task) =>{ response = serde_json::to_string(&task).unwrap() ;  status = "200 OK" ; }, 
                     Err(err) => {response = err_404 ; owned = format!("400 {err}"); status = &owned; } ,
                 } 
@@ -206,9 +208,6 @@ let operations_counter = Arc::new(AtomicUsize::new(0));
 let threadpool = ThreadPool::new(4  , operations_counter ); 
 
 let tasks = Arc::new(Mutex::new(Tasks::new())); 
-
-tasks.lock().unwrap().create(String::from("eat lunch")); 
-tasks.lock().unwrap().create(String::from("eat dinner")); 
 
 let connection = TcpListener::bind("127.0.0.1:7777"); 
 let connection = match connection {

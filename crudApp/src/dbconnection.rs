@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::thread ; 
 pub struct DBconnection {
     sender : mpsc::Sender<String> ,
-    receiver : Arc<Mutex<mpsc::Receiver<String>>> ,
+    receiver : Arc<Mutex<mpsc::Receiver<Vec<u8>>>> ,
     connection : Arc<Mutex<TcpStream>>
 }
 fn buil_start_up(user : &str , db :&str) -> Vec<u8>{
@@ -60,7 +60,7 @@ impl DBconnection {
     
        
         let (req_sender , req_receiver) = mpsc::channel::<String>(); 
-        let (response_send , response_rec) = mpsc::channel::<String>();
+        let (response_send , response_rec) = mpsc::channel::<Vec<u8>>();
 
         let connection = Arc::new(Mutex::new(connection));
         let response_rec = Arc::new(Mutex::new(response_rec)) ;
@@ -78,9 +78,9 @@ impl DBconnection {
             let mut buf = [0;1024]; 
             let n =  connection.read(&mut buf).unwrap(); 
          
-            let response = String::from_utf8_lossy(&buf[..n]);
+            let response =&buf[..n];
            
-            response_send.send( response.to_string()).expect("faild response sending "); 
+            response_send.send((*response).to_vec()).expect("faild response sending "); 
 
 
             
@@ -93,7 +93,7 @@ impl DBconnection {
         let sender = &self.sender ;
             sender.send(query.to_string()).expect("thread pool workers have stopped");
     }
-    pub fn get(&self) -> String {
+    pub fn get(&self) -> Vec<u8> {
         self.receiver.lock().unwrap().recv().unwrap()
     }
    
