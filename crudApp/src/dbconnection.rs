@@ -2,9 +2,12 @@ use std::net::{TcpListener ,  TcpStream };
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex} ; 
 use std::io::{Read , Write}; 
+use std::collections::VecDeque;
+
 use std::thread ; 
 pub struct DBconnection {
     sender : mpsc::Sender<String> ,
+    receiver : Arc<Mutex<mpsc::Receiver<String>>> ,
     connection : Arc<Mutex<TcpStream>>
 }
 fn buil_start_up(user : &str , db :&str) -> Vec<u8>{
@@ -44,6 +47,8 @@ fn build_query(query : &str) -> Vec<u8> {
 impl DBconnection {
     pub fn new(user : &str , db : &str,port : &str)-> Option<Self> {
         let connection = TcpStream::connect(port); 
+        
+
         let mut connection = match connection {
             Ok(connection) => connection , 
             Err(err) => return  None
@@ -54,29 +59,42 @@ impl DBconnection {
         let n =  connection.read(&mut buf).unwrap(); 
     
        
-        let (sender , receiver) = mpsc::channel::<String>(); 
-        let connection = Arc::new(Mutex::new(connection)); 
+        let (req_sender , req_receiver) = mpsc::channel::<String>(); 
+        let (response_send , response_rec) = mpsc::channel::<String>();
+
+        let connection = Arc::new(Mutex::new(connection));
+        let response_rec = Arc::new(Mutex::new(response_rec)) ;
         let connectionArc = Arc::clone(&connection); 
        thread::spawn(move || loop{
             let query = {
-                let query = receiver.recv().unwrap(); 
-                println!("sending the request {:?}" , query);
+                let query = req_receiver.recv().unwrap(); 
+                println!("sending the request {}" , query); 
                 build_query(&query)
             };
             let mut connection = connectionArc.lock().unwrap();
+
             connection.write_all(&query);
+
             let mut buf = [0;1024]; 
             let n =  connection.read(&mut buf).unwrap(); 
-            let request = String::from_utf8_lossy(&buf[..n]);
-            println!("{}" , request); 
+         
+            let response = String::from_utf8_lossy(&buf[..n]);
+           
+            response_send.send( response.to_string()).expect("faild response sending "); 
+
+
             
        });
         let connection = Arc::clone(&connection); 
-        Some(DBconnection {sender , connection})
+        let response_rec = Arc::clone(&response_rec);
+        Some(DBconnection {sender : req_sender , receiver : response_rec, connection })
     }
     pub fn send(&self , query : &str ) {
         let sender = &self.sender ;
             sender.send(query.to_string()).expect("thread pool workers have stopped");
     }
-    
+    pub fn get(&self) -> String {
+        self.receiver.lock().unwrap().recv().unwrap()
+    }
+   
 }

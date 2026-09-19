@@ -73,7 +73,10 @@ impl Tasks {
         if let Some(d) = done {task.done = d } ;
         Ok(task)
     }
-    fn read(&self , id : i32)->Result<&Task , TaskErr>{
+    fn read(&self , id : i32 , db : &DBconnection)->Result<&Task , TaskErr>{
+        let message = format!("SELECT * from tasks WHERE id = {} {}" , id , ";"); 
+        db.send(&message); 
+        println!("{} ", db.get());
         self.tasks.get(&id).ok_or(TaskErr::TaskNotFound(id))
     }
 
@@ -119,10 +122,10 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : A
                 status = "200 OK"
             },
             ("GET" , p ) => {
-                db.send("SELECT name FROM  tasks ;"); 
                 if p.starts_with("/tasks/") {
                      let id = p[7..].parse().unwrap_or(-1);
-                     let task = tasks.read(id); 
+                
+                     let task = tasks.read(id , &db); 
                      match task {
                         Ok(task) => {
                              let json = serde_json::to_string(&task).unwrap(); 
