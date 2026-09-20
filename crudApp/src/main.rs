@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicUsize , Ordering};
 mod dbconnection;
 use dbconnection::DBconnection ; 
 mod sqlParse; 
-
+use sqlParse::extract_details; 
 #[derive(Clone , Debug, Serialize )]
 pub struct Task {
     name : String , id : i32 , done : bool 
@@ -78,7 +78,12 @@ impl Tasks {
     fn read(&self , name : &str , db : &DBconnection)->Result<&Task , TaskErr>{
         let message = format!("SELECT * from tasks WHERE name = '{}' {}" , name , ";"); 
         db.send(&message); 
-        println!("the response is : {:?}",db.get());  //i should parse this into a task and return the result
+        let mut start : usize = 0 ;
+        let mut res = db.get();
+        println!("the full response is {:?}" , res); 
+       
+
+        
         self.tasks.get(&1).ok_or(TaskErr::TaskNotFound(1))
     }
 
