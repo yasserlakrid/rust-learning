@@ -7,7 +7,7 @@ pub struct ThreadPool{
     pub threads : Vec<JoinHandle<()>>,
     pub sender  : Option<mpsc::Sender<Job>>
 }
-impl ThreadPool{
+impl ThreadPool {
     pub fn new(size : usize , operations_counter : Arc<AtomicUsize> )->Self{
         let (sender , receiver) = mpsc::channel::<Job>();
         let receiver = Arc::new(Mutex::new(receiver)); 

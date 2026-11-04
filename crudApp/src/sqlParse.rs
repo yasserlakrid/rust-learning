@@ -58,23 +58,25 @@ impl taskrow {
 
 }
 
-enum Value {
+pub enum Value {
     I16(i16),
     I32(i32),
     I64(i64),
     String(String),
     Bool(bool),
+    Null,
+    Bytes(Vec<u8>),
 }
 
-struct Feild {
-    name : String , 
-    type_IOD : u32 , 
+pub struct Feild {
+    pub name : String , 
+    pub type_IOD : u32 , 
 }
-struct Description {
-    feilds : Vec<Feild>
+pub struct Description {
+    pub feilds : Vec<Feild>
 }
-struct Row {
-    values : Vec<Value>
+pub struct Row {
+    pub values : Vec<Value>
 }
 
 pub trait extract_details {
@@ -115,7 +117,7 @@ impl extract_details for Vec<u8> {
     
 }
 
-trait trait_message {
+pub trait trait_message {
     fn handle_description(& self ) -> Option<Description>;
     fn handle_row(&mut self , description : &Description ) -> Option<Row>;
 }
@@ -129,12 +131,7 @@ impl trait_message for Vec<Option<Vec<u8>>> {
 
                 let body = self[2].as_ref().unwrap();
                  
-               let bytes = self[1].as_ref().unwrap();
-
-                let length = i32::from_be_bytes(
-                    bytes.as_slice().try_into().unwrap()
-                );
-                let mut pos = 0;
+               let mut pos = 0;
 
                 let feilds_num = i16::from_be_bytes(
                     body[pos..pos + 2].try_into().ok()?
@@ -150,9 +147,15 @@ impl trait_message for Vec<Option<Vec<u8>>> {
                         pos += 1 ; 
                     }
                     pos += 1;
-                    new_feild.type_IOD = u32 :: from_be_bytes(body[pos .. pos+4].try_into().ok()?);
-                    pos += 4 ;
-                    pos += 14 ; 
+                    // Table OID (4) and attribute number (2) precede the
+                    // column's type OID in a RowDescription field.
+                    pos += 6;
+                    new_feild.type_IOD = u32::from_be_bytes(
+                        body.get(pos..pos + 4)?.try_into().ok()?
+                    );
+                    pos += 4;
+                    // Type size (2), type modifier (4), format code (2).
+                    pos += 8;
                     new_desc.feilds.push(new_feild);
 
                 }
@@ -161,36 +164,43 @@ impl trait_message for Vec<Option<Vec<u8>>> {
             _=> return None
         }
     }
-  fn handle_row(&mut self, description: &Description) -> Option<Row> {
-    if self[0].as_ref()?.first()? != &b'D' {
+ fn handle_row(&mut self, description: &Description) -> Option<Row> {
+    // 1. Verify that this is a DataRow message ('D')
+    if self.first()?.as_ref()?.first()? != &b'D' {
         return None;
     }
 
-    let body = self[2].as_ref()?;
+    // 2. Get the message body
+    let body = self.get(2)?.as_ref()?;
     let mut pos = 0;
 
+    // 3. Read the number of columns (Int16)
     let fields_num = u16::from_be_bytes(
-        body[pos..pos + 2].try_into().ok()?
+        body.get(pos..pos + 2)?.try_into().ok()?
     );
 
     pos += 2;
 
+    // 4. Verify that the number of columns matches RowDescription
     if fields_num as usize != description.feilds.len() {
         return None;
     }
 
     let mut values = Vec::new();
 
+    // 5. Decode each column
     for field in &description.feilds {
-        let value_length = i32::from_be_bytes(
-            body[pos..pos + 4].try_into().ok()?
-        );
+
+        // Read the value length (Int32)
+        let value_length =
+            i32::from_be_bytes(body.get(pos..pos + 4)?.try_into().ok()?);
 
         pos += 4;
 
-        // NULL
+        // SQL NULL
         if value_length == -1 {
-            return None; // your Value enum currently has no NULL variant
+            values.push(Value::Null);
+            continue;
         }
 
         if value_length < 0 {
@@ -199,39 +209,38 @@ impl trait_message for Vec<Option<Vec<u8>>> {
 
         let value_length = value_length as usize;
 
-        if pos + value_length > body.len() {
-            return None;
-        }
+        // Read the actual value bytes
+        let raw_value = body.get(pos..pos.checked_add(value_length)?)?;
 
-        let raw_value = &body[pos..pos + value_length];
-
+        // 6. Decode according to PostgreSQL type OID
         let value = match field.type_IOD {
+
             21 => {
-                // int2
-                let bytes: [u8; 2] = raw_value.try_into().ok()?;
-                Value::I16(i16::from_be_bytes(bytes))
+                // INT2
+                let s = std::str::from_utf8(raw_value).ok()?;
+                Value::I16(s.parse().ok()?)
             }
 
             23 => {
-                // int4
-                let bytes: [u8; 4] = raw_value.try_into().ok()?;
-                Value::I32(i32::from_be_bytes(bytes))
+                // INT4
+                let s = std::str::from_utf8(raw_value).ok()?;
+                Value::I32(s.parse().ok()?)
             }
 
             20 => {
-                // int8
-                let bytes: [u8; 8] = raw_value.try_into().ok()?;
-                Value::I64(i64::from_be_bytes(bytes))
+                // INT8
+                let s = std::str::from_utf8(raw_value).ok()?;
+                Value::I64(s.parse().ok()?)
             }
 
             25 | 1043 => {
-                // text / varchar
-                let string = String::from_utf8(raw_value.to_vec()).ok()?;
-                Value::String(string)
+                // TEXT / VARCHAR
+                let s = String::from_utf8(raw_value.to_vec()).ok()?;
+                Value::String(s)
             }
 
             16 => {
-                // bool
+                // BOOLEAN
                 match raw_value {
                     [b't'] => Value::Bool(true),
                     [b'f'] => Value::Bool(false),
@@ -239,18 +248,16 @@ impl trait_message for Vec<Option<Vec<u8>>> {
                 }
             }
 
-            _ => {
-                // Unsupported PostgreSQL type
-                return None;
-            }
+            _ => Value::Bytes(raw_value.to_vec()),
         };
 
         values.push(value);
 
+        // Move to the next column
         pos += value_length;
     }
-
+    
+    // 7. Return the decoded row
     Some(Row { values })
 }
-
 }

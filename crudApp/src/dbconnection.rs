@@ -45,16 +45,18 @@ fn build_query(query : &str) -> Vec<u8> {
     message
 }
 impl DBconnection {
-    pub fn new(user : &str , db : &str,port : &str)-> Option<Self> {
-        let connection = TcpStream::connect(port); 
+    pub fn new(user : &str , db : &str,address  : &str)-> Option<Self> {
+        let connection = TcpStream::connect(address); 
         
 
         let mut connection = match connection {
             Ok(connection) => connection , 
             Err(err) => return  None
         }; 
+
         let startupmessage = buil_start_up(user , db);
         connection.write_all(&startupmessage);
+        //for emptying the query from the startup response and be ready for the next read / write 
         let mut buf = [0;1024]; 
         let n =  connection.read(&mut buf).unwrap(); 
     
@@ -81,16 +83,14 @@ impl DBconnection {
             let response =&buf[..n];
            
             response_send.send((*response).to_vec()).expect("faild response sending "); 
-
-
-            
+  
        });
         let connection = Arc::clone(&connection); 
         let response_rec = Arc::clone(&response_rec);
         Some(DBconnection {sender : req_sender , receiver : response_rec, connection })
     }
     pub fn send(&self , query : &str ) {
-        let sender = &self.sender ;
+            let sender = &self.sender ;
             sender.send(query.to_string()).expect("thread pool workers have stopped");
     }
     pub fn get(&self) -> Vec<u8> {
