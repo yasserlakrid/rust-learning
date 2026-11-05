@@ -45,4 +45,4 @@ async function deleteTask(id){
         }
     }).then(res=>res.json()).then(res=>console.log("the deleted task is : " , res))
 }
-getTask("play")
+updateTask(null , "play" , true)

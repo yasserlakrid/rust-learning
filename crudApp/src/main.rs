@@ -79,24 +79,49 @@ impl Tasks {
     }
 
     fn update(&mut self , title : Option<String> , done : Option<bool> , id : i32 , db : &DBconnection) -> Result<Task , TaskErr> {
-       let name =  match &title {
+        
+        let name =  match &title {
             Some(title) => title , 
             None => return Err(TaskErr::TaskNotFound(404)),
         };
 
         let mut task = self.read( name , db); 
-        match (& mut task) {
+        let mut task =  match task {
             Ok(task) => {
-                if let Some(t) = title {task.name = t} ; 
-                if let Some(d) = done {task.done = d } ;
+              task  
                 
             },
             _ => { return Err(TaskErr::TaskNotFound(404)) ; } ,
         }; 
-        task
+       
+        match (title, done){
+            (Some(title) , Some(done))=>{
+                let message = format!("UPDATE tasks SET done = {} WHERE name = '{}' ;" , done ,  title); 
+                println!("{:?}" , message);
+
+                db.send(&message); 
+                let mut start : usize = 0 ;
+                let mut res = db.get();
+                println!("the data base responded with : {:?}" , res); 
+                task.done = done ;
+            },
+            (Some(title) , None)=>{
+                
+            },
+            (None , Some(done))=>{
+
+            },
+            (None ,None )=>{
+
+            },
+        }
+      
+
+        Ok(task)
     }
     fn read(&self , name : &str , db : &DBconnection)->Result<Task , TaskErr>{
         let message = format!("SELECT * from tasks WHERE name = '{}' {}" , name , ";"); 
+        println!("{:?}" , message);
         db.send(&message); 
         let mut start : usize = 0 ;
         let mut res = db.get();
@@ -214,9 +239,10 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : A
 
             } ,
             ("PUT" , p) if p.starts_with("/tasks/") => {
-                db.send("update some shit "); 
-
+               
+                
                 let id = p[7..].parse().unwrap_or(-1);
+                println!("the id is {}" , id);
                 let update : TaskInput = serde_json::from_str(body).unwrap();
                 match &tasks.update(update.title , update.done , id , &db ) {
                     Ok(task) => {response = serde_json::to_string(task).unwrap();  status = "200 OK"  ; },
