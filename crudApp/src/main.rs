@@ -1,20 +1,26 @@
-use std::collections::HashMap;
-use std::net::{TcpListener ,  TcpStream };
-use std::sync::{Arc , Mutex }; 
-use serde::{Serialize, Deserialize};
+use std::{
+    collections::HashMap,
+    fmt,
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    thread,
+};
+
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::io::{Read  , Write }; 
-use std::thread;
-use std::fmt; 
-mod threadpool ; 
-use threadpool::ThreadPool ;
-use std::sync::atomic::{AtomicUsize , Ordering};
+
 mod dbconnection;
-use dbconnection::DBconnection ; 
-mod sqlParse; 
-use sqlParse::extract_details; 
-use sqlParse::trait_message;
-use crate::sqlParse::Value;
+mod threadpool;
+
+use dbconnection::DBconnection;
+use threadpool::ThreadPool;
+mod sqlParse;
+use sqlParse::{extract_details, trait_message, Value};
+
 #[derive(Clone , Debug, Serialize )]
 pub struct Task {
     name : String , id : i32 , done : bool 
@@ -57,7 +63,7 @@ impl Tasks {
         }
     }
     
-    fn create(&mut self ,db : &DBconnection , title : String)-> Result<&Task , TaskErr> {
+    fn create(&mut self ,db : &DBconnection , title : String)-> Result<Task , TaskErr> {
         let id = self.next_id ; 
         
         let new_task = Task {
@@ -66,42 +72,58 @@ impl Tasks {
 
         self.next_id += 1 ; 
         
-        let message = format!("INSERT INTO  tasks (name , Done ) VALUES ({}, FALSE ) {};" ,new_task.name , ";"); 
+        let message = format!("INSERT INTO  tasks (name , Done ) VALUES ('{}', FALSE ) {}" ,new_task.name , ";"); 
         db.send(&message); 
 
-        //local data structure
-        self.tasks.insert(id , new_task) ; 
-        self.tasks.get(&id).ok_or(TaskErr::TaskNotFound(id))
+        Ok(new_task)
     }
 
-    fn update(&mut self , title : Option<String> , done : Option<bool> , id : i32 ) -> Result<&Task , TaskErr> {
-        let task = self.tasks.get_mut(&id).ok_or(TaskErr::TaskNotFound(id)).unwrap() ; 
-        if let Some(t) = title {task.name = t} ; 
-        if let Some(d) = done {task.done = d } ;
-        Ok(task)
+    fn update(&mut self , title : Option<String> , done : Option<bool> , id : i32 , db : &DBconnection) -> Result<Task , TaskErr> {
+       let name =  match &title {
+            Some(title) => title , 
+            None => return Err(TaskErr::TaskNotFound(404)),
+        };
+
+        let mut task = self.read( name , db); 
+        match (& mut task) {
+            Ok(task) => {
+                if let Some(t) = title {task.name = t} ; 
+                if let Some(d) = done {task.done = d } ;
+                
+            },
+            _ => { return Err(TaskErr::TaskNotFound(404)) ; } ,
+        }; 
+        task
     }
     fn read(&self , name : &str , db : &DBconnection)->Result<Task , TaskErr>{
         let message = format!("SELECT * from tasks WHERE name = '{}' {}" , name , ";"); 
         db.send(&message); 
         let mut start : usize = 0 ;
         let mut res = db.get();
+        println!("the full response is {:?}" , res); 
         let mut r = 0 ; 
        
         let mut rowDescription = res.extract_message(&mut r); 
-        let mut dataRow = res.extract_message(&mut r); 
-        let mut rowDescription = rowDescription.handle_description().unwrap(); 
-        let mut dataRow = dataRow.handle_row(&rowDescription).unwrap(); 
 
+        let mut dataRow = res.extract_message(&mut r ); 
+        let mut rowDescription = rowDescription.handle_description().unwrap(); 
+        let mut dataRow = dataRow.handle_row(&rowDescription); 
+        
+       let mut dataRow =  match &dataRow {
+            Some(data) => data , 
+            None => return Err(TaskErr::TaskNotFound(404)) ,  
+        };
+        
         let mut new_task = Task {
             name : "".to_string(), id : 0 , done : false
         };
         
-        for value in dataRow.values {
+        for value in &dataRow.values {
         
             match value {
-                Value::I32(n) => new_task.id = n ,
+                Value::I32(n) => new_task.id = *n ,
                 Value::String(s) => new_task.name = s.to_string() ,
-                Value::Bool(s) => new_task.done = s ,
+                Value::Bool(s) => new_task.done = *s ,
                 
                 _ => println!("Another type"),
             }
@@ -196,7 +218,7 @@ fn handle_connection(mut stream:  TcpStream , tasks : Arc<Mutex<Tasks>> , db : A
 
                 let id = p[7..].parse().unwrap_or(-1);
                 let update : TaskInput = serde_json::from_str(body).unwrap();
-                match tasks.update(update.title , update.done , id ) {
+                match &tasks.update(update.title , update.done , id , &db ) {
                     Ok(task) => {response = serde_json::to_string(task).unwrap();  status = "200 OK"  ; },
                     Err(err) =>{ 
                         response = err_404 ; 
